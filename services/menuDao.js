@@ -3,7 +3,6 @@ const db = require("../config/db");
 async function getMenuOptions(menuKey) {
   if (!menuKey) return [];
 
-  // Mengambil opsi menu dari tabel menu_structure
   const [rows] = await db.execute(
     `SELECT 
         optionKey AS 'key', 

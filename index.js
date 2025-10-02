@@ -1,19 +1,33 @@
 const express = require("express");
 const bodyParser = require("body-parser");
-const { PORT } = require("./config/config");
-const { addLog, setUserState } = require("./services/state");
-const { sendMessage, findAnswer } = require("./services/bot");
+const {
+  PORT
+} = require("./config/config");
+const {
+  addLog,
+  setUserState
+} = require("./services/state");
+const {
+  sendMessage,
+  findAnswer
+} = require("./services/bot");
 
-const { getTickets, findTicketById } = require("./tickets/tickets");
+const {
+  getTickets,
+  findTicketById,
+  releaseTicket
+} = require("./tickets/tickets");
 
 const logsRoute = require("./routes/logs");
 
 const app = express();
 app.use(bodyParser.json());
 
-// Webhook
 app.post("/webhook", async (req, res) => {
-  const { sender, message } = req.body;
+  const {
+    sender,
+    message
+  } = req.body;
   console.log(`Pesan dari ${sender}: ${message}`);
 
   await addLog(sender, "user", message);
@@ -42,8 +56,10 @@ app.get("/admin/takeover/:ticketId", async (req, res) => {
   if (!ticket) {
     return res.status(404).send(`❌ Ticket dengan ID ${ticketId} tidak ditemukan`);
   }
+  const GREETING_ADMIN = "Terima Kasih sudah berkenan untuk menunggu, Anda sekarang terhubung dengan Mas Samin. Silakan sampaikan pertanyaan atau keluhan Anda.";
 
   await setUserState(ticket.sender, "in_admin_chat");
+  await sendMessage(ticket.sender, GREETING_ADMIN);
 
   res.send(`✅ Bot OFF. Admin takeover untuk tiket ${ticket.id} (sender: ${ticket.sender})`);
 });
@@ -59,15 +75,23 @@ app.get("/admin/release/:ticketId", async (req, res) => {
 
   const sender = ticket.sender;
 
-  await setUserState(sender, "post_admin_feedback");
+  try {
+    const {
+      duration
+    } = await releaseTicket(ticket.id, ticket.createdAt);
 
-  // Pesan ini harus konsisten dengan pesan yang diminta Bot.js untuk dikirim setelah release.
-  const feedbackMessage = "Terima kasih telah menunggu. Kami harap layanan Admin kami memuaskan. Mohon berikan penilaian Anda (1-5, di mana 5 = Sangat Puas):";
+    await setUserState(sender, "post_admin_feedback");
 
-  await sendMessage(sender, feedbackMessage);
-  await addLog(sender, "bot", feedbackMessage);
+    const feedbackMessage = "Terima kasih telah menunggu. Kami harap layanan Admin kami memuaskan. Mohon berikan penilaian Anda (1-5, di mana 5 = Sangat Puas):";
 
-  res.send(`✅ Bot ON. Penilaian dikirim untuk tiket ${ticket.id} (sender: ${ticket.sender})`);
+    await sendMessage(sender, feedbackMessage);
+    await addLog(sender, "bot", feedbackMessage);
+
+    res.send(`✅ Bot ON. Penilaian dikirim untuk tiket ${ticket.id} (Durasi: ${duration}, sender: ${ticket.sender})`);
+  } catch (e) {
+    console.error("Kesalahan saat release tiket:", e);
+    return res.status(500).send(`❌ Gagal menyelesaikan proses release tiket.`);
+  }
 });
 
 app.get("/", (req, res) => {

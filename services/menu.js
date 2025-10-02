@@ -1,6 +1,4 @@
-// FAQ
-const faq = [
-  {
+const faq = [{
     key: "1",
     question: "Jam buka",
     answer: "Kami buka setiap hari 08.00–17.00 WIB",
@@ -21,10 +19,8 @@ const faq = [
   },
 ];
 
-// Menu utama & turunan
 const menu = {
-  main: [
-    {
+  main: [{
       key: "1",
       text: "Menu 1",
       next: "menu2",
@@ -51,8 +47,7 @@ const menu = {
     answer: item.answer,
     next: item.key === "0" ? "main" : null,
   })),
-  menu2: [
-    {
+  menu2: [{
       key: "1",
       text: "Menu 1.1",
     },
@@ -66,8 +61,7 @@ const menu = {
       next: "main",
     },
   ],
-  menu3: [
-    {
+  menu3: [{
       key: "1",
       text: "Menu 2.1",
     },

@@ -1,10 +1,23 @@
 const axios = require("axios");
-const { TOKEN } = require("../config/config");
-const { getMenuOptions, formatMenu } = require("./menuDao");
+const {
+  TOKEN
+} = require("../config/config");
+const {
+  getMenuOptions,
+  formatMenu
+} = require("./menuDao");
 
-const { addLog, getUserState, setUserState, resetUserState } = require("./state");
+const {
+  addLog,
+  getUserState,
+  setUserState,
+  resetUserState
+} = require("./state");
 
-const { createTicket } = require("../tickets/tickets.js");
+const {
+  createTicket,
+  updateTicketRating
+} = require("../tickets/tickets.js");
 
 // --- PESAN STATIS (Sesuai Rollback) ---
 const GREETING_MESSAGE_1 =
@@ -16,23 +29,21 @@ const GREETING_MESSAGE_1 =
 const GREETING_MESSAGE_2 = "Ada yang bisa MAS SAMIN bantu terkait Investasi di Kabupaten Bojonegoro?";
 const MENU_PROMPT = "Silakan pilih menu:\n";
 const SUBMENU_PROMPT = "Silakan pilih menu selanjutnya:\n";
-const WAITING_ADMIN_MESSAGE = "Silakan tunggu sebentar, Admin akan segera menghubungi Anda 捉窶昨汳ｼ";
+const WAITING_ADMIN_MESSAGE = "Silakan tunggu sebentar, Admin akan segera menghubungi Anda.";
 const FALLBACK_MESSAGE = "Mohon Maaf MAS SAMIN tidak dapat menemukan jawaban untuk pertanyaan Anda.";
 const FEEDBACK_QUESTION = "Apakah Jawaban Mas Samin membantu menjawab pertanyaan Anda?\n1. Ya\n2. Tidak";
 const ADMIN_OFFER_TEXT = "Apakah Anda ingin terhubung dengan Admin untuk bantuan lebih lanjut?";
-const ADMIN_OFFER_OPTIONS = "1. Ya hubungkan ke admin\n0. Kembali ke menu utama";
+const ADMIN_OFFER_OPTIONS = "1. Hubungkan dengan admin\n0. Kembali ke menu utama";
 const RATING_ADMIN_PROMPT = "Terima kasih telah menunggu. Kami harap layanan Admin kami memuaskan. Mohon berikan penilaian Anda (1-5, di mana 5 = Sangat Puas):";
-const RATING_BOT_SUCCESS = "Terima kasih atas feedback Anda 剌\nUntuk harapnya Anda dapat mengisi Survey Kepuasan Masyarakat terkait layanan kami melalui link berikut: https://s.id/Kn80D";
+const RATING_BOT_SUCCESS = "Terima kasih atas feedback Anda.\nUntuk harapnya Anda dapat mengisi Survey Kepuasan Masyarakat terkait layanan kami melalui link berikut: https://s.id/Kn80D";
 
 async function sendMessage(to, message) {
   try {
     await axios.post(
-      "https://api.fonnte.com/send",
-      {
+      "https://api.fonnte.com/send", {
         target: to,
         message,
-      },
-      {
+      }, {
         headers: {
           Authorization: TOKEN,
         },
@@ -48,7 +59,7 @@ async function findAnswer(msg, sender) {
 
   // --- LOGIKA AWAL / GREETING ---
   if (!state) {
-    await resetUserState(sender);
+    await resetUserState(sender, "main");
     const mainMenuOptions = await getMenuOptions("main");
 
     return [GREETING_MESSAGE_1, GREETING_MESSAGE_2 + "\n" + MENU_PROMPT + formatMenu(mainMenuOptions)];
@@ -63,8 +74,9 @@ async function findAnswer(msg, sender) {
   if (state === "post_admin_feedback") {
     const rating = parseInt(msg.trim());
     if (rating >= 1 && rating <= 5) {
-      await resetUserState(sender);
-      return [`Terima kasih atas penilaian ${rating} Anda untuk layanan Admin. Kami akan terus meningkatkan kualitas layanan kami 剌`, MENU_PROMPT + formatMenu(await getMenuOptions("main"))];
+      await updateTicketRating(sender, rating);
+      await resetUserState(sender, "");
+      return [`Terima kasih atas penilaian ${rating} Anda untuk layanan Admin. Kami akan terus meningkatkan kualitas layanan kami.`, RATING_BOT_SUCCESS];
     } else {
       return ["Mohon maaf, format penilaian tidak valid. Masukkan angka dari 1 sampai 5.", RATING_ADMIN_PROMPT];
     }
@@ -73,12 +85,10 @@ async function findAnswer(msg, sender) {
   // --- LOGIKA PENILAIAN BOT (FEEDBACK) ---
   if (state === "feedback") {
     if (msg === "1" || msg.toLowerCase() === "ya") {
-      await resetUserState(sender);
+      await resetUserState(sender, "");
 
-      // PERBAIKAN: Mengirimkan tiga pesan untuk mengulang alur penuh:
       return [RATING_BOT_SUCCESS];
     } else if (msg === "2" || ["tidak", "no"].includes(msg.toLowerCase())) {
-      // Logika penawaran admin tetap sama
       await setUserState(sender, "admin_offer");
       return [ADMIN_OFFER_TEXT, ADMIN_OFFER_OPTIONS];
     }
@@ -88,11 +98,19 @@ async function findAnswer(msg, sender) {
   if (state === "admin_offer") {
     if (msg === "1") {
       const ticket = await createTicket(sender, "User ingin terhubung dengan Admin");
+
+      if (ticket.id === "FAILED") {
+        return [
+          "Mohon maaf, terjadi kesalahan teknis saat membuat tiket layanan. Silakan coba lagi nanti."
+        ];
+      }
+
       await setUserState(sender, "waiting_admin");
       await addLog(sender, "system", `Tiket dibuat: ID ${ticket.id}, Status: waiting_admin`);
       return [`Baik, MAS SAMIN telah membuat tiket dengan ID ${ticket.id}.`, WAITING_ADMIN_MESSAGE];
+
     } else if (msg === "0") {
-      await resetUserState(sender);
+      await resetUserState(sender, "main");
       return [MENU_PROMPT + formatMenu(await getMenuOptions("main"))];
     }
   }
@@ -109,7 +127,7 @@ async function findAnswer(msg, sender) {
 
   if (selected) {
     if (selected.next === "main") {
-      await resetUserState(sender);
+      await resetUserState(sender, "main");
       return [MENU_PROMPT + formatMenu(await getMenuOptions("main"))];
     } else if (selected.next) {
       await setUserState(sender, selected.next);
@@ -122,9 +140,8 @@ async function findAnswer(msg, sender) {
   }
 
   // --- LOGIKA FALLBACK ---
-  await resetUserState(sender);
-  const mainMenuOptions = await getMenuOptions("main");
-  return [FALLBACK_MESSAGE, MENU_PROMPT + formatMenu(mainMenuOptions)];
+  await resetUserState("");
+  return [FALLBACK_MESSAGE];
 }
 
 module.exports = {
