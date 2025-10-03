@@ -28,7 +28,7 @@ function formatMenu(menuOptions) {
 
   const menuString = menuOptions
     .map((item) => {
-      return `${item.key}. ${item.text}`;
+      return `${item.key}. ${item.text}`;
     })
     .join("\n");
 

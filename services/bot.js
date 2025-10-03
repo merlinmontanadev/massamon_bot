@@ -131,24 +131,42 @@ async function findAnswer(msg, sender) {
 
   // --- LOGIKA MENU DINAMIS ---
   const currentMenuOptions = await getMenuOptions(state);
-  const selected = currentMenuOptions.find((item) => item.key === msg);
+  const selected = currentMenuOptions.find((item) => parseInt(item.optionKey) === parseInt(msg)); 
 
-  if (selected) {
-    if (selected.next === "main") {
-      await resetUserState(sender, "main");
-      return [MENU_PROMPT + formatMenu(await getMenuOptions("main"))];
-    } else if (selected.next) {
-      await setUserState(sender, selected.next);
-      const nextMenuOptions = await getMenuOptions(selected.next);
-      return [SUBMENU_PROMPT + formatMenu(nextMenuOptions)];
-    } else if (selected.answer || selected.text) {
-      await setUserState(sender, "feedback");
-      return [selected.answer || selected.text, FEEDBACK_QUESTION];
+if (selected) {
+    // --- 1. KASUS SPESIAL: PINDAH KE STATE 'search_rpr' ---
+    if (selected.nextKey === 'search_rpr') {
+        await setUserState(sender, 'search_rpr');
+        
+        return [
+            "Anda memilih **Pencarian Zona Tata Ruang (RPR)**. 🛰️\n\n" + 
+            "Silakan kirimkan koordinat lokasi Anda dalam format:\n" +
+            "**LINTANG,BUJUR** (misalnya: -7.15704, 111.884)\n\n" +
+            "Ketik '0' atau 'menu' untuk kembali."
+        ];
+    } 
+    
+    // --- 2. KASUS PINDAH MENU BIASA ---
+    else if (selected.nextKey === "main") {
+        await resetUserState(sender, "main");
+        return [MENU_PROMPT + formatMenu(await getMenuOptions("main"))];
+    } else if (selected.nextKey) {
+        await setUserState(sender, selected.nextKey);
+        const nextMenuOptions = await getMenuOptions(selected.nextKey);
+        return [SUBMENU_PROMPT + formatMenu(nextMenuOptions)];
+    } 
+    
+    // --- 3. KASUS JAWABAN STATIS ---
+    // Gunakan optionText karena answerText bisa NULL
+    else if (selected.answerText || selected.optionText) { 
+        await setUserState(sender, "feedback");
+        return [selected.answerText || selected.optionText, FEEDBACK_QUESTION];
     }
-  }
+}
+
 
   // --- LOGIKA FALLBACK ---
-  await resetUserState("");
+  await resetUserState(sender, "");
   return [FALLBACK_MESSAGE];
 }
 

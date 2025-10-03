@@ -4,7 +4,7 @@ const fs = require("fs"); // Module bawaan Node.js untuk Filesystem
 const path = require("path"); // Module bawaan untuk path file
 
 // Tentukan path ke file GeoJSON lokal
-const GEOJSON_FILE_PATH = path.join(__dirname, "..", "../assets/RPR.geojson"); // Mencari RPR.geojson di root directory
+const GEOJSON_FILE_PATH = path.join(__dirname, "..", "assets/RPR.geojson"); // Mencari RPR.geojson di root directory
 let rprData = null;
 
 // Fungsi untuk memuat data GeoJSON dari file lokal (Synchronous, karena hanya dilakukan saat startup)
