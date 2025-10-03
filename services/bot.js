@@ -1,23 +1,12 @@
 const axios = require("axios");
-const {
-  TOKEN
-} = require("../config/config");
-const {
-  getMenuOptions,
-  formatMenu
-} = require("./menuDao");
+const { TOKEN } = require("../config/config");
+const { getMenuOptions, formatMenu } = require("./menuDao");
 
-const {
-  addLog,
-  getUserState,
-  setUserState,
-  resetUserState
-} = require("./state");
+const { addLog, getUserState, setUserState, resetUserState } = require("./state");
 
-const {
-  createTicket,
-  updateTicketRating
-} = require("../tickets/tickets.js");
+const { checkPointInRpr } = require("./gis");
+
+const { createTicket, updateTicketRating } = require("../tickets/tickets.js");
 
 // --- PESAN STATIS (Sesuai Rollback) ---
 const GREETING_MESSAGE_1 =
@@ -40,10 +29,12 @@ const RATING_BOT_SUCCESS = "Terima kasih atas feedback Anda.\nUntuk harapnya And
 async function sendMessage(to, message) {
   try {
     await axios.post(
-      "https://api.fonnte.com/send", {
+      "https://api.fonnte.com/send",
+      {
         target: to,
         message,
-      }, {
+      },
+      {
         headers: {
           Authorization: TOKEN,
         },
@@ -56,6 +47,7 @@ async function sendMessage(to, message) {
 
 async function findAnswer(msg, sender) {
   const state = await getUserState(sender);
+  const lowerCaseMessage = msg.toLowerCase().trim();
 
   // --- LOGIKA AWAL / GREETING ---
   if (!state) {
@@ -63,6 +55,25 @@ async function findAnswer(msg, sender) {
     const mainMenuOptions = await getMenuOptions("main");
 
     return [GREETING_MESSAGE_1, GREETING_MESSAGE_2 + "\n" + MENU_PROMPT + formatMenu(mainMenuOptions)];
+  }
+
+  if (state === "search_rpr") {
+    const parts = lowerCaseMessage.split(",").map((p) => parseFloat(p.trim()));
+
+    const latitude = parts[0];
+    const longitude = parts[1];
+
+    if (parts.length === 2 && !isNaN(longitude) && !isNaN(latitude)) {
+      const gisResult = gisService.checkPointInRpr(longitude, latitude);
+
+      await resetUserState(sender, "main");
+
+      const mainMenuOptions = await getMenuOptions("main");
+      return [gisResult, MENU_PROMPT + formatMenu(mainMenuOptions)];
+    } else {
+      // Pesan Error jika format salah
+      return ["Format koordinat salah. Mohon gunakan format **LINTANG,BUJUR** (Contoh: -7.15704, 111.884)\n\nKetik '0' atau 'menu' untuk kembali ke menu utama."];
+    }
   }
 
   // --- LOGIKA LOCK STATE (ADMIN) ---
@@ -100,15 +111,12 @@ async function findAnswer(msg, sender) {
       const ticket = await createTicket(sender, "User ingin terhubung dengan Admin");
 
       if (ticket.id === "FAILED") {
-        return [
-          "Mohon maaf, terjadi kesalahan teknis saat membuat tiket layanan. Silakan coba lagi nanti."
-        ];
+        return ["Mohon maaf, terjadi kesalahan teknis saat membuat tiket layanan. Silakan coba lagi nanti."];
       }
 
       await setUserState(sender, "waiting_admin");
       await addLog(sender, "system", `Tiket dibuat: ID ${ticket.id}, Status: waiting_admin`);
       return [`Baik, MAS SAMIN telah membuat tiket dengan ID ${ticket.id}.`, WAITING_ADMIN_MESSAGE];
-
     } else if (msg === "0") {
       await resetUserState(sender, "main");
       return [MENU_PROMPT + formatMenu(await getMenuOptions("main"))];
